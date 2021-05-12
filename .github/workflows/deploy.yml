@@ -1,0 +1,46 @@
+name: deploy
+
+on:
+  push:
+    branches:
+    - '**'
+    paths-ignore:
+    - '.vscode/**'
+    - '.editorconfig'
+    - '.prettierignore'
+    - 'LICENSE'
+    - 'README.md'
+
+env:
+  APP_URL: "https://${{ secrets.APP_NAME }}.herokuapp.com"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Use Node.js 15.x
+      uses: actions/setup-node@v1
+      with:
+        node-version: '15.x'
+    - run: npm ci
+    - run: npm run build
+  
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: akhileshns/heroku-deploy@v3.12.12
+      with:
+        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+        heroku_app_name: ${{ secrets.APP_NAME }}
+        heroku_email: ${{ secrets.EMAIL }}
+        healthcheck: "${{ env.APP_URL }}/health"
+        checkstring: "Ok"
+        rollbackonhealthcheckfailed: true
+        delay: 5
+      env:
+        HD_BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        HD_APP_URL: ${{ env.APP_URL }}
