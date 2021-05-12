@@ -2,7 +2,7 @@ import express from 'express'
 import axios from 'axios'
 import { apiRouter } from './api'
 import { JSDOM } from 'jsdom'
-import { pipe } from 'fp-ts/Function'
+import { pipe } from 'fp-ts/function'
 import { Option, isSome, some, none, match, fromNullable, toNullable, map, getOrElse, chain } from 'fp-ts/Option'
 
 const app = express();
@@ -15,6 +15,7 @@ type Team = {
     url: string | null
     logoUrl: string | null
 }
+
 type League = {
     name: string | null
     url: string | null
@@ -37,7 +38,7 @@ type Match = {
 }
 
 const nullSafePrepend = (prepend: string, str: string | null | undefined) =>
-    pipe(str, fromNullable, map(url => `${prepend}${url}`))
+    pipe(str, fromNullable, map((url:string) => `${prepend}${url}`))
 
 function parseMatch(e: Element): Option<Match> {
 
@@ -63,7 +64,7 @@ function parseMatch(e: Element): Option<Match> {
 
     function parseStartsAt(e: Element): Option<Date> {
         const unixTime = e.querySelector('.timer-object')?.getAttribute('data-timestamp')
-        return pipe(unixTime, fromNullable, map(unix => new Date(parseInt(unix) * 1000)))
+        return pipe(unixTime, fromNullable, map((unix:string) => new Date(parseInt(unix) * 1000)))
     }
 
     function parseScore(e: Element): Option<string> {
@@ -73,9 +74,7 @@ function parseMatch(e: Element): Option<Match> {
             match (
                 () => e.innerHTML.replace('<b>', '').replace('</b>', '').replace('\n', ''),
                 (value:string) => {
-                    if (value === "vs")
-                        return '0:0'
-                    if (value.includes(':'))
+                    if (value === "vs" || value.includes(':'))
                         return value
                     else
                         return e.innerHTML.replace('<b>', '').replace('</b>', '')
@@ -133,7 +132,7 @@ function parseMatch(e: Element): Option<Match> {
     const teamB = pipe(teamBElem, fromNullable, map(parseTeam))
 
     if (isSome(teamA) && isSome(teamB)) {
-        return some ({
+        const a = ({
             teamA: teamA.value,
             teamB: teamB.value,
             startsAt: pipe(countdownElem, fromNullable, chain(parseStartsAt), toNullable),
@@ -142,6 +141,7 @@ function parseMatch(e: Element): Option<Match> {
             streams: pipe(countdownElem, fromNullable, map(parseStreams), getOrElse(() => [] as Stream[])),
             league: pipe(leagueElem, fromNullable, map(parseLeague), toNullable)
         })
+        return some(a)
     }
     else {
         return none
@@ -160,8 +160,8 @@ app.get('/', async (req, res) => {
 
 // app.use('/', apiRouter)
 
-app.listen(3000, () => {
-    console.log('The application is listening on port 3000!');
+app.listen(process.env.PORT || 8080, () => {
+    console.log(`The application is listening on port ${process.env.PORT} and 8080!`);
 })
 
 
