@@ -2,7 +2,7 @@ import axios from 'axios'
 import { JSDOM } from 'jsdom'
 import { pipe } from 'fp-ts/function'
 import { Option, isSome, some, none, match, fromNullable, toNullable, map, getOrElse, chain } from 'fp-ts/Option'
-
+import _ from 'lodash'
 import { Match, Team, League, Stream } from './domain'
 
 const liquipedia = 'https://liquipedia.net'
@@ -25,8 +25,8 @@ function parseMatch(e: Element): Option<Match> {
         const logo = teamLogoElem?.getElementsByTagName('img')?.item(0)?.getAttribute('src')
 
         return {
-            name: pipe(name, fromNullable, toNullable),
-            fullname: pipe(fullname, fromNullable, toNullable),
+            name: pipe(name, fromNullable, getOrElse(() => "TBD")),
+            fullname: pipe(fullname, fromNullable, getOrElse(() => "TBD")),
             url: pipe(nullSafePrepend(liquipedia, url), toNullable),
             logoUrl: pipe(nullSafePrepend(liquipedia, logo), toNullable)
         }
@@ -42,12 +42,12 @@ function parseMatch(e: Element): Option<Match> {
             e.firstElementChild?.innerHTML,
             fromNullable,
             match (
-                () => e.innerHTML.replace('<b>', '').replace('</b>', '').replace('\n', ''),
+                () => e.innerHTML.replace('<b>', '').replace('</b>', '').trim(),
                 (value:string) => {
                     if (value === "vs" || value.includes(':'))
-                        return value
+                        return value.trim()
                     else
-                        return e.innerHTML.replace('<b>', '').replace('</b>', '')
+                        return e.innerHTML.replace('<b>', '').replace('</b>', '').trim()
                 }
             ),
             fromNullable
@@ -102,16 +102,18 @@ function parseMatch(e: Element): Option<Match> {
     const teamB = pipe(teamBElem, fromNullable, map(parseTeam))
 
     if (isSome(teamA) && isSome(teamB)) {
-        const a = ({
+        const countdown = pipe(countdownElem, fromNullable, chain(parseStartsAt), toNullable)
+        const id = `${countdown?.getTime()}-${teamA.value.name?.trim()}-${teamB.value.name?.trim()}`
+        return some({
+            matchId: id,
             teamA: teamA.value,
             teamB: teamB.value,
-            startsAt: pipe(countdownElem, fromNullable, chain(parseStartsAt), toNullable),
+            startsAt: countdown,
             score: pipe(versusElem, fromNullable, chain(parseScore), toNullable),
             bestOf: pipe(versusElem, fromNullable, chain(parseBestOf), toNullable),
             streams: pipe(countdownElem, fromNullable, map(parseStreams), getOrElse(() => [] as Stream[])),
             league: pipe(leagueElem, fromNullable, map(parseLeague), toNullable)
         })
-        return some(a)
     }
     else {
         return none
@@ -122,6 +124,11 @@ export async function scrapeMatches() {
     const response = await axios.get(`${liquipedia}/dota2/Liquipedia:Upcoming_and_ongoing_matches`)
     const fragment = JSDOM.fragment(response.data)
     const matchElements = fragment.querySelectorAll('.wikitable').values()
-    return Array.from(matchElements)
+
+    const matches = Array.from(matchElements)
         .map(e => pipe(e.firstElementChild, fromNullable, chain(parseMatch), toNullable))
+        .filter((x): x is Match => x !== null)
+    const uniqueMatches = _.uniqBy(matches, 'matchId')
+    const sortedUniqueMatches = _.sortBy(uniqueMatches, 'startsAt')
+    return sortedUniqueMatches
 }

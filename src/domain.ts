@@ -17,6 +17,7 @@ export type Stream = {
 }
 
 export type Match = {
+    matchId: string
     teamA: Team
     teamB: Team
     startsAt: Date | null
