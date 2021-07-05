@@ -1,0 +1,14 @@
+version: "3"
+services:
+  database:
+    container_name: esports-app
+    image: postgres:13.3-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /data/postgres
+    volumes:
+      - ./.postgres:/data/postgres
+    ports:
+      - '5432:5432'
+    restart: unless-stopped
