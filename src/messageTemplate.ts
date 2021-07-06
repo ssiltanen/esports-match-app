@@ -1,13 +1,23 @@
 import { Match } from "./domain"
+import { DateTime } from "luxon"
 
 export function matchTemplate(match: Match) {
     let startsAt: string
     if (match.startsAt === null) startsAt = ''
-    else if (match.startsAt < new Date()) startsAt = 'LIVE NOW!'
-    else startsAt = `@ ${match.startsAt.toUTCString()}`
-
+    else {
+        const start = DateTime.fromJSDate(match.startsAt)
+        const diff = start.diffNow()
+        const timestamp = start.setLocale('fi').toLocaleString(DateTime.DATETIME_FULL)
+        if (diff.valueOf() < 0) startsAt = 'LIVE NOW!'
+        else {
+            const dur = diff.shiftTo('days', 'hours', 'minutes').toObject()
+            const days = dur.days ? dur.days : 0
+            const hours = dur.hours ? dur.hours : 0
+            const minutes = dur.minutes ? dur.minutes : 0
+            startsAt = `in ${days ? days + 'd ' : ''}${hours ? hours + 'h ' : ''}${Math.round(minutes)}min \n@ ${timestamp}`
+        }
+    }
     let score = match.score ? match.score : 'vs'
-
     const streams = match.streams
         .map(s => `<a href="${s.url}">${s.platform}</a>`)
         .join('\n')
@@ -20,20 +30,20 @@ export function matchTemplate(match: Match) {
 <b>League</b>
 <a href="${match.league?.url}">${match.league?.name}</a>
 
-<b>Streams</b>
-${streams}`
+${streams.length > 0 ? `<b>Streams</b>\n${streams}` : ''}`
 }
 
 export function concludedMatchTemplate(match: Match) {
     let startsAt: string
     if (match.startsAt === null) startsAt = ''
-    else startsAt = `Match played @ ${match.startsAt.toUTCString()}`
-
+    else {
+        const timestamp = DateTime
+            .fromJSDate(match.startsAt)
+            .setLocale('fi')
+            .toLocaleString(DateTime.DATETIME_FULL)
+        startsAt = `Match was played \n@ ${timestamp}`
+    }
     let score = match.score ? match.score : 'vs'
-
-    const streams = match.streams
-        .map(s => `<a href="${s.url}">${s.platform}</a>`)
-        .join('\n')
 
     return `
 <b>${startsAt}</b>
@@ -43,4 +53,3 @@ export function concludedMatchTemplate(match: Match) {
 <b>League</b>
 <a href="${match.league?.url}">${match.league?.name}</a>`
 }
-
