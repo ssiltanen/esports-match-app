@@ -25,7 +25,7 @@ app.get('/sub', async (_req: Request, res: Response) => {
     const matches = await scrapeMatches()
     const subs = await db.query('SELECT chat_id, team FROM subscription')
     subs.rows.forEach(async (sub) => { 
-        const match = matches.find(m => team(m, sub.team) && startsIn(m, 30))
+        const match = matches.find(m => team(m, sub.team) && startsIn(m, 100))
         if (match) await sendSubscriptionEvent(bot, sub.chat_id, match)
     })
     res.send()
