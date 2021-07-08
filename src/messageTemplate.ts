@@ -1,5 +1,5 @@
-import { Match } from "./domain"
-import { DateTime } from "luxon"
+import { Match } from './domain'
+import { DateTime } from 'luxon'
 
 export function matchTemplate(match: Match) {
     let startsAt: string

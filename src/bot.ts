@@ -1,9 +1,9 @@
-import TelegramBot, { SendMessageOptions } from "node-telegram-bot-api"
+import TelegramBot, { SendMessageOptions } from 'node-telegram-bot-api'
 import { concluded, live, startsIn, team, Match } from './domain'
-import { concludedMatchTemplate, matchTemplate, matchTemplateFull } from "./messageTemplate"
-import { scrapeMatches } from "./scrape"
+import { concludedMatchTemplate, matchTemplate, matchTemplateFull } from './messageTemplate'
+import { scrapeMatches } from './scrape'
 import db from './db'
-import { QueryResult } from "pg"
+import { QueryResult } from 'pg'
 
 const { BOT_TOKEN, APP_URL, PORT } = process.env
 if (!BOT_TOKEN) throw new Error('"BOT_TOKEN" env var is required!')
@@ -38,14 +38,16 @@ const messageOptions = (match: Match) : SendMessageOptions => {
     }
 }
 
-const browsingMessageEditOptions = (chatId: number, msgId: number, idx: number, max: number) : TelegramBot.EditMessageTextOptions => {
+const browsingMessageEditOptions = (chatId: number, msgId: number, event: string, idx: number, max: number) : TelegramBot.EditMessageTextOptions => {
     let inlineKeyboard : TelegramBot.InlineKeyboardButton[][]
     if (idx === 0)
-        inlineKeyboard = [ [ { text: '\tNext\t', callback_data: '1' } ] ]
+        inlineKeyboard = [ [ { text: '\tNext\t', callback_data: `${event}:1` } ] ]
     else if (idx === max)
-        inlineKeyboard = [ [ { text: '\tPrevious\t', callback_data: (idx - 1).toString() } ] ]
+        inlineKeyboard = [ [ { text: '\tPrevious\t', callback_data: `${event}:${idx - 1}` } ] ]
     else
-        inlineKeyboard = [ [ { text: '\tPrevious\t', callback_data: (idx - 1).toString() }, { text: '\tNext\t', callback_data: (idx + 1).toString() } ] ]
+        inlineKeyboard = [ [ 
+            { text: '\tPrevious\t', callback_data: `${event}:${idx - 1}` }, 
+            { text: '\tNext\t', callback_data: `${event}:${idx + 1}` } ] ]
 
     return { 
         parse_mode: "HTML", 
@@ -66,25 +68,16 @@ bot.onText(/\/all/, async (msg: TelegramBot.Message) => {
     if (filtered.length === 0)
         await bot.sendMessage(chatId, 'No upcoming matches at this time...')
     else {
-        const sentMsg = await bot.sendMessage(
+        await bot.sendMessage(
             chatId, 
             matchTemplateFull(filtered[0]),
             { 
                 parse_mode: "HTML", 
                 disable_web_page_preview: true,
                 reply_markup: { 
-                    inline_keyboard: [ [ { text: 'Next', callback_data: '1' } ] ]
+                    inline_keyboard: [ [ { text: 'Next', callback_data: 'all:1' } ] ]
                 }
             })
-        bot.on('callback_query', async (callbackQuery) => {
-            const text = callbackQuery.data
-            if (text) {
-                const idx = parseInt(text)
-                bot.editMessageText(
-                    matchTemplateFull(filtered[idx]), 
-                    browsingMessageEditOptions(chatId, sentMsg.message_id, idx, filtered.length - 1))
-            }
-        })
     }
 })
 
@@ -114,25 +107,16 @@ bot.onText(/\/recent/, async (msg: TelegramBot.Message) => {
     if (filtered.length === 0)
         await bot.sendMessage(chatId, 'No recently finished matches at this time...')
     else {
-        const sentMsg = await bot.sendMessage(
+        await bot.sendMessage(
             chatId, 
             concludedMatchTemplate(filtered[0]),
             { 
                 parse_mode: "HTML", 
                 disable_web_page_preview: true,
                 reply_markup: { 
-                    inline_keyboard: [ [ { text: 'Next', callback_data: '1' } ] ]
+                    inline_keyboard: [ [ { text: 'Next', callback_data: 'recent:1' } ] ]
                 }
             })
-        bot.on('callback_query', async (callbackQuery) => {
-            const text = callbackQuery.data
-            if (text) {
-                const idx = parseInt(text)
-                bot.editMessageText(
-                    concludedMatchTemplate(filtered[idx]), 
-                    browsingMessageEditOptions(chatId, sentMsg.message_id, idx, filtered.length - 1))
-            }
-        })
     }
 })
 
@@ -167,7 +151,7 @@ bot.onText(/\/next/, async (msg: TelegramBot.Message) => {
 
 const whitelisted = async (db: { query: (text: string, params?: any) => Promise<QueryResult<any>> }, chatId: number) => {
     const result = await db.query('SELECT chat_id FROM whitelist WHERE chat_id=$1', [chatId])
-    return (result.rowCount && result.rowCount >= 0)
+    return result.rowCount >= 0
 }
 
 bot.onText(/\/subscribe/, async (msg: TelegramBot.Message) => {
@@ -204,21 +188,17 @@ bot.onText(/\/unsubscribe/, async (msg: TelegramBot.Message) => {
     const onWhitelist = await whitelisted(db, chatId)
     if (onWhitelist) {
         const result = await db.query('SELECT team FROM subscription WHERE chat_id=$1', [ chatId ])
-        await bot.sendMessage(
-            chatId, 
-            "Which team do you not like anymore?", 
-            { 
-                reply_markup: 
-                    { inline_keyboard: result.rows.map(row => [ { text: row.team , callback_data: row.team } ]) } 
-            }
-        )
-        bot.on('callback_query', async (callbackQuery) => {
-            const text = callbackQuery.data
-            if (text) {
-                await db.query('DELETE FROM subscription WHERE chat_id=$1 AND team=LOWER($2)', [ chatId, text ])
-                await bot.answerCallbackQuery(callbackQuery.id, { text: `I'm sure ${text} is sad to see you go...` })
-            }
-        })
+        if (result.rowCount === 0)
+            await bot.sendMessage(chatId, "No active subscriptions at this time...")
+        else
+            await bot.sendMessage(
+                chatId, 
+                "Which team do you not like anymore?", 
+                { 
+                    reply_markup: 
+                        { inline_keyboard: result.rows.map(row => [ { text: row.team , callback_data: `unsubscribe:${row.team}` } ]) } 
+                }
+            )
     }
 })
 
@@ -237,5 +217,31 @@ bot.onText(/\/subscriptions/, async (msg: TelegramBot.Message) => {
 export const sendSubscriptionEvent = async (bot: TelegramBot, chatId: number, match: Match) => {
     await bot.sendMessage(chatId, matchTemplate(match), messageOptions(match))
 }
+
+bot.on('callback_query', async (callbackQuery) => {
+    const chatId = callbackQuery.message?.chat.id
+    const msgId = callbackQuery.message?.message_id
+    const data = callbackQuery.data
+    if (chatId && msgId && data) {
+        const [ event, eventData ] = data.split(':')
+        if (event === 'all' || event === 'recent') {
+            const matches = await scrapeMatches()
+            let filtered
+            if (event === 'all') filtered = matches.filter(m => !concluded(m))
+            else filtered = matches.filter(m => concluded(m)).reverse()
+            const idx = parseInt(eventData)
+            bot.editMessageText(
+                matchTemplateFull(filtered[idx]), 
+                browsingMessageEditOptions(chatId, msgId, event, idx, filtered.length - 1))
+        }
+        else if (event === 'unsubscribe') {
+            await db.query('DELETE FROM subscription WHERE chat_id=$1 AND team=LOWER($2)', [ chatId, eventData ])
+            await bot.answerCallbackQuery(callbackQuery.id, { text: `I'm sure ${eventData} is sad to see you go...` })
+        }
+        else {
+            console.log(`Unknown event type in callback_query: ${event}`)
+        }
+    }
+})
 
 export default bot
