@@ -4,6 +4,13 @@ import { concludedMatchTemplate, matchTemplate, matchTemplateFull } from './mess
 import { scrapeMatches } from './scrape'
 import db from './db'
 import { QueryResult } from 'pg'
+var memoize = require("memoizee")
+
+// Memoize needs a parameter to work so let's wrap our function with unnecessary parameter for it
+const memoizedMatchScrape = memoize(
+    (i:any) => scrapeMatches(), 
+    { maxAge: 5 * 60 * 1000 }
+)
 
 const { BOT_TOKEN, APP_URL, PORT } = process.env
 if (!BOT_TOKEN) throw new Error('"BOT_TOKEN" env var is required!')
@@ -60,10 +67,13 @@ const browsingMessageEditOptions = (chatId: number, msgId: number, event: string
     }
 }
 
+
+
+
 bot.onText(/\/all/, async (msg: TelegramBot.Message) => {
     const chatId = msg.chat.id
     bot.sendChatAction(chatId, 'typing')
-    const matches = await scrapeMatches()
+    const matches : Match[] = await memoizedMatchScrape(1)
     const filtered = matches.filter(m => !concluded(m))
     if (filtered.length === 0)
         await bot.sendMessage(chatId, 'No upcoming matches at this time...')
@@ -84,7 +94,7 @@ bot.onText(/\/all/, async (msg: TelegramBot.Message) => {
 bot.onText(/\/live/, async (msg: TelegramBot.Message) => {
     const chatId = msg.chat.id
     bot.sendChatAction(chatId, 'typing')
-    const matches = await scrapeMatches()
+    const matches : Match[] = await memoizedMatchScrape(1)
     const filtered = matches.filter(m => live(m) || startsIn(m, 15))
     if (filtered.length === 0)
         await bot.sendMessage(chatId, 'No live matches at this time...')
@@ -102,7 +112,7 @@ bot.onText(/\/chatid/, async (msg: TelegramBot.Message) => {
 bot.onText(/\/recent/, async (msg: TelegramBot.Message) => {
     const chatId = msg.chat.id
     bot.sendChatAction(chatId, 'typing')
-    const matches = await scrapeMatches()
+    const matches : Match[] = await memoizedMatchScrape(1)
     const filtered = matches.filter(m => concluded(m)).reverse()
     if (filtered.length === 0)
         await bot.sendMessage(chatId, 'No recently finished matches at this time...')
@@ -132,7 +142,7 @@ bot.onText(/\/next/, async (msg: TelegramBot.Message) => {
             bot.sendChatAction(chatId, 'typing')
             const text = msg.text
             if (text) {
-                const matches = await scrapeMatches()
+                const matches : Match[] = await memoizedMatchScrape(1)
                 const filtered = matches.filter(m => !concluded(m) && team(m, text))
                 if (filtered.length === 0)
                     await bot.sendMessage(chatId, `No upcoming matches for ${text}.`)
@@ -225,7 +235,7 @@ bot.on('callback_query', async (callbackQuery) => {
     if (chatId && msgId && data) {
         const [ event, eventData ] = data.split(':')
         if (event === 'all' || event === 'recent') {
-            const matches = await scrapeMatches()
+            const matches : Match[] = await memoizedMatchScrape(1)
             let filtered
             if (event === 'all') filtered = matches.filter(m => !concluded(m))
             else filtered = matches.filter(m => concluded(m)).reverse()

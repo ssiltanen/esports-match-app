@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { setupCache } from 'axios-cache-adapter'
 import { JSDOM } from 'jsdom'
 import { pipe } from 'fp-ts/function'
 import { Option, isSome, some, none, match, fromNullable, toNullable, map, getOrElse, chain } from 'fp-ts/Option'
@@ -122,9 +121,7 @@ function parseMatch(e: Element): Option<Match> {
 }
 
 export async function scrapeMatches() {
-    const cache = setupCache({ maxAge: 5 * 60 * 1000 })
-    const api = axios.create({ adapter: cache.adapter })
-    const response = await api({
+    const response = await axios({
         url: `${liquipedia}/dota2/Liquipedia:Upcoming_and_ongoing_matches`,
         method: 'get'
     })
