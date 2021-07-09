@@ -9,7 +9,7 @@ var memoize = require("memoizee")
 // Memoize needs a parameter to work so let's wrap our function with unnecessary parameter for it
 const memoizedMatchScrape = memoize(
     (i:any) => scrapeMatches(), 
-    { maxAge: 5 * 60 * 1000 }
+    { maxAge: 3 * 60 * 1000 }
 )
 
 const { BOT_TOKEN, APP_URL, PORT } = process.env
