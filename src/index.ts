@@ -35,7 +35,7 @@ app.get('/', async (_req: Request, res: Response) => {
 
     const unique = _.uniqBy(subscribedMatches, 'matchId')
     if (unique.length > 0) {
-      bot.sendMessage(chat_id, ':rotating_light: Hey, your team is playing soon!')
+      bot.sendMessage(chat_id, 'Hey, your team is playing soon!')
       _.orderBy(unique, 'startsAt', 'asc')
         .forEach(async match => {
           if (match) await sendSubscriptionEvent(bot, parseInt(chat_id), match)
