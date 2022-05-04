@@ -9,6 +9,10 @@ export interface Subscription {
   team: string
 }
 
+export interface SlackSubscription {
+  team: string
+}
+
 export interface Whitelist {
   chat_id: number
 }
@@ -56,5 +60,17 @@ export default {
     await pool.query(
       'DELETE FROM subscription WHERE chat_id=$1 AND team=LOWER($2)',
       [ chatId, team ])
-  }
+  },
+
+  slackSubscriptions: async () => {
+    const {rows} = await pool.query<SlackSubscription>('SELECT team FROM slack_subscription')
+    return rows
+  },
+
+  isTeamSlackSubscribed: async (team: string[]) => {
+    const result: QueryResult<Subscription> = await pool.query(
+      'SELECT team FROM slack_subscription WHERE team=LOWER($2)',
+      [ team ])
+    return result.rowCount > 0
+  },
 }
