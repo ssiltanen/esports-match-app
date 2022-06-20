@@ -30,6 +30,13 @@ export default {
     return result.rowCount >= 0
   },
 
+  isAdmin: async (chatId: number) => {
+    const result: QueryResult<Whitelist> = await pool.query(
+      'SELECT is_admin FROM whitelist WHERE chat_id=$1', 
+      [chatId])
+    return result.rowCount >= 0
+  },
+
   isTeamSubscribed: async (chatId: number, team: string) => {
     const result: QueryResult<Subscription> = await pool.query(
       'SELECT team FROM subscription WHERE chat_id=$1 AND team=LOWER($2)',
@@ -67,9 +74,19 @@ export default {
     return rows
   },
 
-  isTeamSlackSubscribed: async (team: string[]) => {
+  insertSlackSubscription: async (team: string) => {
+    await pool.query(
+      'INSERT INTO slack_subscription (team) VALUES ($1)',
+      [ team ])
+  },
+
+  deleteSlackSubscription: async (team: string) => {
+    await pool.query('DELETE FROM slack_subscription WHERE team = LOWER($1)', [ team ])
+  },
+
+  isTeamSlackSubscribed: async (team: string) => {
     const result: QueryResult<Subscription> = await pool.query(
-      'SELECT team FROM slack_subscription WHERE team=LOWER($2)',
+      'SELECT team FROM slack_subscription WHERE team = LOWER($1)',
       [ team ])
     return result.rowCount > 0
   },

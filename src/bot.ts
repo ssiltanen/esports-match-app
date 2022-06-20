@@ -105,6 +105,67 @@ bot.onText(/\/chatid/, async (msg: TelegramBot.Message) => {
   await bot.sendMessage(chatId, chatId.toString())
 })
 
+bot.onText(/\/slack_subscribe/, async (msg: TelegramBot.Message) => {
+  const chatId = msg.chat.id
+  const isAdmin = await db.isAdmin(chatId)
+  if (isAdmin) {
+    const sentMsg = await bot.sendMessage(
+      chatId, 
+      "Which team would you like to subscribe to?", 
+      { reply_markup: { force_reply: true } }
+    )
+    const listenerId = bot.onReplyToMessage(chatId, sentMsg.message_id, async (msg) => {
+      try {
+        const text = msg.text
+        if (text) {
+          const subscribed = await db.isTeamSlackSubscribed(text)
+          if (!subscribed) {
+            await db.insertSlackSubscription(text)
+            await bot.sendMessage(chatId, `${text} is now slack subscribed!`)
+          } else {
+            await bot.sendMessage(chatId, `Let's not get carried away and subscribe twice to ${text}!`)
+          }
+        }
+      }
+      finally {
+        bot.removeReplyListener(listenerId)
+      }
+    })
+  }
+})
+
+bot.onText(/\/slack_unsubscribe/, async (msg: TelegramBot.Message) => {
+  const chatId = msg.chat.id
+  const isAdmin = await db.isAdmin(chatId)
+  if (isAdmin) {
+    const subscriptions = await db.slackSubscriptions()
+    if (subscriptions.length === 0)
+      await bot.sendMessage(chatId, "No active subscriptions at this time...")
+    else {
+      await bot.sendMessage(
+        chatId, 
+        "Which team do you not like anymore?", 
+        { 
+          reply_markup: 
+            { inline_keyboard: subscriptions.map(row => [ { text: row.team , callback_data: `slack_unsubscribe:${row.team}` } ]) } 
+        }
+      )
+    }
+  }
+})
+
+bot.onText(/\/slack_subscriptions/, async (msg: TelegramBot.Message) => {
+  const chatId = msg.chat.id
+  const isAdmin = await db.isAdmin(chatId)
+  if (isAdmin) {
+    const subscriptions = await db.slackSubscriptions()
+    if (subscriptions.length === 0)
+      await bot.sendMessage(chatId, "No active subscriptions at this time...")
+    else
+      await bot.sendMessage(chatId, subscriptions.map(row => row.team).join('\n'))
+  }
+})
+
 bot.onText(/\/recent/, async (msg: TelegramBot.Message) => {
   const chatId = msg.chat.id
   bot.sendChatAction(chatId, 'typing')
@@ -241,6 +302,10 @@ bot.on('callback_query', async (callbackQuery) => {
     }
     else if (event === 'unsubscribe') {
       await db.deleteSubscription(chatId, eventData)
+      await bot.answerCallbackQuery(callbackQuery.id, { text: `I'm sure ${eventData} is sad to see you go...` })
+    }
+    else if (event === 'slack_unsubscribe') {
+      await db.deleteSlackSubscription(eventData)
       await bot.answerCallbackQuery(callbackQuery.id, { text: `I'm sure ${eventData} is sad to see you go...` })
     }
     else
